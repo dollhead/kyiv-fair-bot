@@ -11,6 +11,7 @@ using System.Net.Http;
 using HtmlAgilityPack;
 using System.Linq;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace KyivFairBot.Function
 {
@@ -29,8 +30,44 @@ namespace KyivFairBot.Function
 
             log.LogInformation("Processing message.");
 
-            var fairLinks = GetAllFairLinks();
-            return (ActionResult)new OkObjectResult(fairLinks);
+            var latestFairLink = GetAllFairLinks().First();
+            var doc = HtmlWeb.Load(latestFairLink);
+            var contentXPath = "/html/body/div[1]/div/div[2]/div[2]/div/div[2]/div[1]/div[4]/div";
+
+            var content = doc
+                .DocumentNode
+                .SelectSingleNode(contentXPath);
+
+            var fairDates = GetFairDates(content).ToList();
+            
+            var fairs = content
+                .SelectNodes("ul")
+                .Select(x => x.InnerText)
+                .ToList();
+
+            var fairsDict = new Dictionary<DateTime, string>();
+            for (var i = 0; i < fairDates.Count(); i++)
+            {
+                var fairDate = fairDates[i];
+                fairsDict[fairDate] = fairs[i];
+            }
+
+
+            return (ActionResult)new OkObjectResult(fairsDict);
+        }
+        
+        private static IEnumerable<DateTime> GetFairDates(HtmlNode content)
+        {
+            var provider = new CultureInfo("uk");
+            return content
+                .SelectNodes("p/strong")
+                .Select(x => x.InnerText)
+                .Select(x => 
+                {
+                    var dayStartIndex = x.IndexOf('(');
+                    return DateTime.Parse(x.Substring(0, dayStartIndex - 1), provider, DateTimeStyles.AssumeLocal);
+                });
+            
         }
 
         private static IEnumerable<string> GetAllFairLinks()
