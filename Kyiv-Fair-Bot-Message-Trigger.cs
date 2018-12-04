@@ -40,16 +40,16 @@ namespace KyivFairBot.Function
 
             var fairDates = GetFairDates(content).ToList();
             
-            var fairs = content
+            var fairsByDate = content
                 .SelectNodes("ul")
-                .Select(x => x.InnerText)
+                .Select(x => x.SelectNodes("li").Select(e => e.InnerText.Replace("&nbsp", " ").Replace("&ndash", " ")))
                 .ToList();
 
-            var fairsDict = new Dictionary<DateTime, string>();
+            var fairsDict = new Dictionary<DateTime, IEnumerable<string>>();
             for (var i = 0; i < fairDates.Count(); i++)
             {
                 var fairDate = fairDates[i];
-                fairsDict[fairDate] = fairs[i];
+                fairsDict[fairDate] = fairsByDate[i];
             }
 
 
