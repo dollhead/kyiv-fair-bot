@@ -25,7 +25,7 @@ namespace KyivFairBot.Function
 
         [FunctionName("Kyiv_Fair_Bot_Message_Trigger")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
 
