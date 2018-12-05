@@ -20,6 +20,20 @@ namespace KyivFairBot.Function
     {
         private static string KyivCityBaseUrl = "https://kyivcity.gov.ua";
         private static string FairsInfoUrl = $"{KyivCityBaseUrl}/biznes_ta_litsenzuvannia/yarmarky_106.html";
+
+        private static List<string> Neighborhoods = new List<string>()
+        {
+            "Голосіївський",
+            "Дарницький",
+            "Деснянський",
+            "Дніпровський",
+            "Оболонський",
+            "Печерський",
+            "Подільський",
+            "Святошинський",
+            "Солом'янський",
+            "Шевченківський"
+        };
         
         private static HtmlWeb HtmlWeb = new HtmlWeb();
 
@@ -117,9 +131,23 @@ namespace KyivFairBot.Function
 
         public class Fair
         {
+            private const int NumberOfCharsToCompare = 3;
+
+            private string _neighborhood;
+
             public DateTime Date { get; set; }
 
-            public string Neighborhood { get; set; }
+            public string Neighborhood 
+            {
+                 get { return _neighborhood; }
+
+                 set 
+                 {
+                    var firstChars = value.Substring(0, NumberOfCharsToCompare);
+                    var neighborhoodName = Neighborhoods.FirstOrDefault(n => n.Substring(0, NumberOfCharsToCompare) == firstChars);
+                    _neighborhood = neighborhoodName;
+                 }
+            }
 
             public string Location { get; set; }
         }
