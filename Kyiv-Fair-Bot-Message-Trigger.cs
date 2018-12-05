@@ -74,7 +74,15 @@ namespace KyivFairBot.Function
                 //TODO: we should use local time here but it's a little bit complicated since I am on linux.
                 if (fairDate > DateTime.UtcNow)
                 {
-                    futureFairs.AddRange(fairsByDate[i].Select(f => new Fair{Date = fairDate, Location = f}));
+                    var fairs = fairsByDate[i]
+                        .Select(f => new Fair
+                        {
+                            Date = fairDate,
+                            Location = f.Split("–").Last().Trim(),
+                            Neighborhood = f.Split("–").First().Trim()
+                        });
+
+                    futureFairs.AddRange(fairs);
                 }
             }
 
@@ -111,7 +119,7 @@ namespace KyivFairBot.Function
         {
             public DateTime Date { get; set; }
 
-            //public string Neighborhood { get; set; }
+            public string Neighborhood { get; set; }
 
             public string Location { get; set; }
         }
