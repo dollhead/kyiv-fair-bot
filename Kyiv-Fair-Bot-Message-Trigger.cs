@@ -12,6 +12,7 @@ using HtmlAgilityPack;
 using System.Linq;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Web;
 
 namespace KyivFairBot.Function
 {
@@ -19,7 +20,7 @@ namespace KyivFairBot.Function
     {
         private static string KyivCityBaseUrl = "https://kyivcity.gov.ua";
         private static string FairsInfoUrl = $"{KyivCityBaseUrl}/biznes_ta_litsenzuvannia/yarmarky_106.html";
-
+        
         private static HtmlWeb HtmlWeb = new HtmlWeb();
 
         [FunctionName("Kyiv_Fair_Bot_Message_Trigger")]
@@ -30,8 +31,28 @@ namespace KyivFairBot.Function
 
             log.LogInformation("Processing message.");
 
-            var latestFairLink = GetAllFairLinks().First();
-            var doc = HtmlWeb.Load(latestFairLink);
+            var fairLinks = GetAllFairLinks();
+            var futureFairs = new List<Fair>();
+
+            foreach (var link in fairLinks)
+            {
+                var futureFairsByLink = GetFutureFairsByLink(link);
+                if (futureFairsByLink.Any())
+                {
+                    futureFairs.AddRange(futureFairsByLink);
+                    continue;
+                }
+
+                break;
+            }
+
+            return (ActionResult)new OkObjectResult(futureFairs);
+        }
+
+        private static IEnumerable<Fair> GetFutureFairsByLink(string fairLink)
+        {
+            var futureFairs = new List<Fair>();
+            var doc = HtmlWeb.Load(fairLink);
             var contentXPath = "/html/body/div[1]/div/div[2]/div[2]/div/div[2]/div[1]/div[4]/div";
 
             var content = doc
@@ -39,23 +60,27 @@ namespace KyivFairBot.Function
                 .SelectSingleNode(contentXPath);
 
             var fairDates = GetFairDates(content).ToList();
-            
+
             var fairsByDate = content
                 .SelectNodes("ul")
-                .Select(x => x.SelectNodes("li").Select(e => e.InnerText.Replace("&nbsp", " ").Replace("&ndash", " ")))
+                .Select(x => x.SelectNodes("li").Select(e => HttpUtility.HtmlDecode(e.InnerText)))
                 .ToList();
 
-            var fairsDict = new Dictionary<DateTime, IEnumerable<string>>();
+
             for (var i = 0; i < fairDates.Count(); i++)
             {
                 var fairDate = fairDates[i];
-                fairsDict[fairDate] = fairsByDate[i];
+
+                //TODO: we should use local time here but it's a little bit complicated since I am on linux.
+                if (fairDate > DateTime.UtcNow)
+                {
+                    futureFairs.AddRange(fairsByDate[i].Select(f => new Fair{Date = fairDate, Location = f}));
+                }
             }
 
-
-            return (ActionResult)new OkObjectResult(fairsDict);
+            return futureFairs;
         }
-        
+
         private static IEnumerable<DateTime> GetFairDates(HtmlNode content)
         {
             var provider = new CultureInfo("uk");
@@ -80,6 +105,15 @@ namespace KyivFairBot.Function
                 .Select(fair => $"{KyivCityBaseUrl}{fair.Attributes["href"].Value}");
 
             return fairLinks;
+        }
+
+        public class Fair
+        {
+            public DateTime Date { get; set; }
+
+            //public string Neighborhood { get; set; }
+
+            public string Location { get; set; }
         }
     }
 }
