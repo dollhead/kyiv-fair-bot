@@ -16,7 +16,7 @@ using System.Web;
 
 namespace KyivFairBot.Function
 {
-    public static class Kyiv_Fair_Bot_Message_Trigger
+    public static class KyivFairBotTimerTrigger
     {
         private static string KyivCityBaseUrl = "https://kyivcity.gov.ua";
         private static string FairsInfoUrl = $"{KyivCityBaseUrl}/biznes_ta_litsenzuvannia/yarmarky_106.html";
@@ -37,9 +37,9 @@ namespace KyivFairBot.Function
         
         private static HtmlWeb HtmlWeb = new HtmlWeb();
 
-        [FunctionName("Kyiv_Fair_Bot_Message_Trigger")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
+        [FunctionName("KyivFairBotTimerTrigger")]
+        public static async Task Run(
+            [TimerTrigger("0 */12 * * *")]TimerInfo timer,
             [CosmosDB(
                 databaseName: "Fairs",
                 collectionName: "FutureFairs",
@@ -59,8 +59,6 @@ namespace KyivFairBot.Function
             }
             
             await Task.WhenAll(saveTasks);
-            
-            return new OkResult();
         }
 
         private static async Task SaveFairsByLink(string fairLink, IAsyncCollector<Fair> fairCollector)
