@@ -13,6 +13,8 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Azure.Documents.Linq;
+using System.Text;
 
 namespace KyivFairsBot
 {
@@ -47,13 +49,43 @@ namespace KyivFairsBot
             var requestContent = await req.ReadAsStringAsync();
             var update = JsonConvert.DeserializeObject<Update>(requestContent);
 
+            var callbackQuery = update.CallbackQuery;
+            if (callbackQuery != null)
+            {
+                var collectionUri = UriFactory.CreateDocumentCollectionUri("Fairs", "FutureFairs");
+
+                var feedOptions = new FeedOptions{EnableCrossPartitionQuery = true};
+                var query = client.CreateDocumentQuery<Fair>(collectionUri, feedOptions)
+                    .Where(p => p.Neighborhood.Contains(callbackQuery.Data))
+                    .AsDocumentQuery();
+
+                var response = new StringBuilder();
+                while (query.HasMoreResults)
+                {
+                    foreach (var result in await query.ExecuteNextAsync<Fair>())
+                    {
+                        response.Append($"Дата: {result.Date}, Місце: {result.Location}");
+                    }
+                }
+
+                var responseString = response.ToString();
+                if (string.IsNullOrEmpty(responseString))
+                {
+                    responseString = "На жаль, у вашому районі найближчим часом ярмарки не заплановані.";
+                }
+
+                await BotClient.SendTextMessageAsync(update.CallbackQuery.Message.Chat.Id,
+                    responseString);
+
+                return new OkResult();    
+            }
+
             if (update.Message.Text == "/start")
             {
                 var buttonRows = Neighborhoods.Select(n => new List<InlineKeyboardButton>{InlineKeyboardButton.WithCallbackData(n)});
                 var inlineKeyboard = new InlineKeyboardMarkup(buttonRows);
 
-                await BotClient.SendTextMessageAsync(
-                    update.Message.Chat.Id,
+                await BotClient.SendTextMessageAsync(update.Message.Chat.Id,
                     "Виберіть ваш район:",
                     replyMarkup: inlineKeyboard);
             }
