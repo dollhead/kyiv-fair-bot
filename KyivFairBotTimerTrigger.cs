@@ -39,7 +39,7 @@ namespace KyivFairBot.Function
 
         [FunctionName("KyivFairBotTimerTrigger")]
         public static async Task Run(
-            [TimerTrigger("0 */12 * * *")]TimerInfo timer,
+            [TimerTrigger("0 0 */12 * * *")]TimerInfo timer,
             [CosmosDB(
                 databaseName: "Fairs",
                 collectionName: "FutureFairs",
