@@ -39,34 +39,33 @@ namespace KyivFairBot.Function
 
         [FunctionName("Kyiv_Fair_Bot_Message_Trigger")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
+            [CosmosDB(
+                databaseName: "Fairs",
+                collectionName: "FutureFairs",
+                ConnectionStringSetting = "CosmosDBConnection")]
+                IAsyncCollector<Fair> fairDocuments,
             ILogger log)
         {
-
             log.LogInformation("Processing message.");
 
-            var fairLinks = GetAllFairLinks();
+            var fairLinks = await GetAllFairLinks();
             var futureFairs = new List<Fair>();
 
+            var saveTasks = new List<Task>();
             foreach (var link in fairLinks)
             {
-                var futureFairsByLink = GetFutureFairsByLink(link);
-                if (futureFairsByLink.Any())
-                {
-                    futureFairs.AddRange(futureFairsByLink);
-                    continue;
-                }
-
-                break;
+                saveTasks.Add(SaveFairsByLink(link, fairDocuments));
             }
-
-            return (ActionResult)new OkObjectResult(futureFairs);
+            
+            await Task.WhenAll(saveTasks);
+            
+            return new OkResult();
         }
 
-        private static IEnumerable<Fair> GetFutureFairsByLink(string fairLink)
+        private static async Task SaveFairsByLink(string fairLink, IAsyncCollector<Fair> fairCollector)
         {
-            var futureFairs = new List<Fair>();
-            var doc = HtmlWeb.Load(fairLink);
+            var doc = await HtmlWeb.LoadFromWebAsync(fairLink);
             var contentXPath = "/html/body/div[1]/div/div[2]/div[2]/div/div[2]/div[1]/div[4]/div";
 
             var content = doc
@@ -96,11 +95,12 @@ namespace KyivFairBot.Function
                             Neighborhood = f.Split("–").First().Trim()
                         });
 
-                    futureFairs.AddRange(fairs);
+                    foreach(var fair in fairs)
+                    {
+                        await fairCollector.AddAsync(fair);
+                    }
                 }
             }
-
-            return futureFairs;
         }
 
         private static IEnumerable<DateTime> GetFairDates(HtmlNode content)
@@ -109,17 +109,30 @@ namespace KyivFairBot.Function
             return content
                 .SelectNodes("p/strong")
                 .Select(x => x.InnerText)
+                .Select(text => HttpUtility.HtmlDecode(text))
                 .Select(x => 
                 {
                     var dayStartIndex = x.IndexOf('(');
+                    if (dayStartIndex == -1)
+                    {
+                        //TODO: this is wrong. Should parse news date.
+                        if (x.Split(' ').First().ToLower() == "сьогодні")
+                        {
+                            return DateTime.UtcNow;
+                        }
+
+                        var date = string.Join(' ', x.Split(' ').AsSpan().Slice(0, 2).ToArray());
+                        return DateTime.Parse(date, provider, DateTimeStyles.AssumeLocal);
+                    }
+
                     return DateTime.Parse(x.Substring(0, dayStartIndex - 1), provider, DateTimeStyles.AssumeLocal);
                 });
             
         }
 
-        private static IEnumerable<string> GetAllFairLinks()
+        private static async Task<IEnumerable<string>> GetAllFairLinks()
         {
-            var doc = HtmlWeb.Load(FairsInfoUrl);
+            var doc = await HtmlWeb.LoadFromWebAsync(FairsInfoUrl);
             var fairsXPath = "//*[@id='ultab4']/li/div[3]/div[1]/a";
             var fairLinks = doc
                 .DocumentNode
@@ -143,6 +156,11 @@ namespace KyivFairBot.Function
 
                  set 
                  {
+                    if (value.StartsWith("у"))
+                    {
+                        value = value.Substring(2);
+                    }
+
                     var firstChars = value.Substring(0, NumberOfCharsToCompare);
                     var neighborhoodName = Neighborhoods.FirstOrDefault(n => n.Substring(0, NumberOfCharsToCompare) == firstChars);
                     _neighborhood = neighborhoodName;
